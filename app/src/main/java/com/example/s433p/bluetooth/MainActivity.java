@@ -349,7 +349,7 @@ public class MainActivity extends AppCompatActivity {
                 // Connect to the remote device through the socket. This call blocks
                 // until it succeeds or throws an exception.
                 //mmSocket.connect();
-                
+                mmSocket.connect();
             } catch (IOException connectException) {
                 final String connectStatus = "Unable to connect; close the socket and return";
                 runOnUiThread(new Runnable() {
