@@ -1,5 +1,6 @@
 package com.example.s433p.bluetooth;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothServerSocket;
@@ -10,6 +11,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
@@ -19,8 +21,11 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -36,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
     int REQUEST_BLUETOOTH = 1000;
     BluetoothAdapter mBTAdapter;
 
-    LinearLayout paried;
+    LinearLayout pariedDevices;
     LinearLayout avalable;
     static Context context;
 
@@ -96,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
         context = getApplicationContext();
         setContentView(R.layout.activity_main);
         avalable = findViewById(R.id.available);
-        paried = findViewById(R.id.paired);
+        pariedDevices = findViewById(R.id.paired);
 
         mBTAdapter = BluetoothAdapter.getDefaultAdapter();
         if (mBTAdapter == null) {
@@ -114,10 +119,12 @@ public class MainActivity extends AppCompatActivity {
             GetAvailableBluetoothDevices();
             GetPairedBluetoothDevices();
 
-            Thread xxx=new AcceptThread();
-            xxx.start();
+
+            //   Thread xxx=new AcceptThread();
+            //    xxx.start();
         }
     }
+
 
     private ArrayList GetPairedBluetoothDevices() {
         ArrayList<BluetoothDevice> arrayOfAlreadyPairedBTDevices = null;
@@ -132,44 +139,54 @@ public class MainActivity extends AppCompatActivity {
             for (final BluetoothDevice device : pairedDevices) {
 
                 String name = device.getName();
-                String address = device.getAddress();
+                final String address = device.getAddress();
                 int bondState = device.getBondState();
                 int type = -1;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2)
                     type = device.getType();
-                ParcelUuid[] uuid = device.getUuids();
-                String str_uuid = uuid.toString();
 
-                View v = LayoutInflater.from(context).inflate(R.layout.bluetooth_device, null, false);
+                ParcelUuid[] uuids = device.getUuids();
+                String str_uuid = uuids.toString();
+
+                View v = LayoutInflater.from(MainActivity.this).inflate(R.layout.bluetooth_device, null, false);
+
                 LinearLayout content = (LinearLayout) ((LinearLayout) v).getChildAt(1);
 
-
-                TextView tvname = new TextView(context);
+                TextView tvname = new TextView(MainActivity.this);
                 tvname.setText(name);
 
-                TextView tvaddr = new TextView(context);
+                TextView tvaddr = new TextView(MainActivity.this);
                 tvaddr.setText(address);
 
-                // TextView tvuuid=new TextView(context);
-                // tvuuid.setText(str_uuid);
-
-
-                TextView tvtype = new TextView(context);
+                TextView tvtype = new TextView(MainActivity.this);
                 tvtype.setText(type + "");
 
                 content.addView(tvname);
                 content.addView(tvaddr);
-                //   content.addView(tvuuid);
                 content.addView(tvtype);
 
-                v.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        new ConnectThread(device).start();
-                    }
-                });
 
-                paried.addView(v);
+                for (ParcelUuid x : uuids) {
+                    final  UUID uuid = x.getUuid();
+                    Button uuidx = new Button(MainActivity.this);
+
+
+                    ViewGroup.MarginLayoutParams params=new ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+                    params.bottomMargin=5;
+
+                    uuidx.setLayoutParams(params);
+                    String strUUID = uuid.toString();
+                    uuidx.setText(strUUID);
+                    content.addView(uuidx);
+
+                    uuidx.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            new ConnectThread(address,uuid).start();
+                        }
+                    });
+                }
+                pariedDevices.addView(v);
             }
         }
 
@@ -261,7 +278,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -274,8 +290,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-    //    mBTAdapter.cancelDiscovery();
-       // unregisterReceiver(receiver);
+        //    mBTAdapter.cancelDiscovery();
+        // unregisterReceiver(receiver);
     }
 
     @Override
@@ -298,25 +314,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
-
     private class ConnectThread extends Thread {
         private final BluetoothSocket mmSocket;
         private final BluetoothDevice mmDevice;
-        private final String TAG="xxxxxx";
+        private final String TAG = "xxxxxx";
 
-        public ConnectThread(BluetoothDevice device) {
+        public ConnectThread(String address, UUID uuid) {
             // Use a temporary object that is later assigned to mmSocket
             // because mmSocket is final.
             BluetoothSocket tmp = null;
-            mmDevice = device;
+            mmDevice = mBTAdapter.getRemoteDevice(address);
+
 
             try {
                 // Get a BluetoothSocket to connect with the given BluetoothDevice.
                 // MY_UUID is the app's UUID string, also used in the server code.
-                tmp = device.createRfcommSocketToServiceRecord(MY_UUID);
+
+
+                Log.d("XXXUUID ", uuid.toString());
+                tmp = mmDevice.createRfcommSocketToServiceRecord(uuid);
+
+
             } catch (IOException e) {
-                Log.e(TAG, "Socket's create() method failed", e);
+                Toast.makeText(MainActivity.this, "Socket's create() method failed", Toast.LENGTH_SHORT).show();
             }
             mmSocket = tmp;
         }
@@ -324,25 +344,49 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             // Cancel discovery because it otherwise slows down the connection.
             mBTAdapter.cancelDiscovery();
-            String connectStatus="";
+
             try {
                 // Connect to the remote device through the socket. This call blocks
                 // until it succeeds or throws an exception.
-                mmSocket.connect();
+                //mmSocket.connect();
+                
             } catch (IOException connectException) {
-                connectStatus="Unable to connect; close the socket and return";
+                final String connectStatus = "Unable to connect; close the socket and return";
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, connectStatus, Toast.LENGTH_SHORT).show();
+                    }
+                });
+
                 try {
                     mmSocket.close();
                 } catch (IOException closeException) {
-                    Log.e(TAG, "Could not close the client socket", closeException);
+                    final String statusx = "Could not close the client socket" + closeException;
+
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, statusx, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+
                 }
                 return;
             }
 
             // The connection attempt succeeded. Perform work associated with
             // the connection in a separate thread.
-          ///  manageMyConnectedSocket(mmSocket);
-            String connectok="";
+            ///  manageMyConnectedSocket(mmSocket);
+            final String connectok = "okkkkkkkkkkkkkkkk!";
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(MainActivity.this, connectok, Toast.LENGTH_SHORT).show();
+                }
+            });
+
         }
 
         // Closes the client socket and causes the thread to finish.
@@ -354,7 +398,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
 
 
     private class AcceptThread extends Thread {
@@ -379,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
 
                     socket = mmServerSocket.accept();
-                    String test="sss";
+                    String test = "sss";
                 } catch (IOException e) {
                     break;
                 }
